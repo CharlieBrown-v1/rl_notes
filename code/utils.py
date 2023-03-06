@@ -36,7 +36,7 @@ def get_best_cuda() -> int:
 def eval_policy(env: gym.Env, agent: Algorithm) -> float:
     num_episodes = 40
     returns_sum = 0.0
-    for idx in tqdm(range(num_episodes)):
+    for idx in range(num_episodes):
         done = False
         obs = env.reset()
         while not done:

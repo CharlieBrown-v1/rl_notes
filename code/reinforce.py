@@ -32,19 +32,19 @@ class REINFORCE(Algorithm):
         self.update_method = update_method
         assert self.update_method in ['original', 'reward-to-go']
         
-        self.policy = nn.Sequential(
+        self.policy_net = nn.Sequential(
             nn.Linear(self.observation_dim, self.hidden_dim),
             nn.ReLU(),
             nn.Linear(self.hidden_dim, self.action_dim),
             nn.Softmax(dim=-1),
         ).to(self.device)
         
-        self.optimizer = Adam(self.policy.parameters(), lr=lr)
+        self.optimizer = Adam(self.policy_net.parameters(), lr=lr)
     
     def take_action(self, observation: np.ndarray, deterministic: bool = False):
         observation = th.as_tensor(observation).float().to(self.device)
         
-        probs = self.policy(observation)
+        probs = self.policy_net(observation)
         action_dist = th.distributions.Categorical(probs)
         if deterministic:
             action = action_dist.mean
@@ -93,7 +93,7 @@ class REINFORCE(Algorithm):
             obs_tensor = th.as_tensor(obs_list[tau_idx]).to(self.device).float()
             action_tensor = th.as_tensor(action_list[tau_idx]).to(self.device).long()
             returns_tensor = th.as_tensor(returns_list[tau_idx]).to(self.device).float()
-            logit = self.policy(obs_tensor)
+            logit = self.policy_net(obs_tensor)
             log_prob = th.log(th.gather(logit, 1, action_tensor.view(-1, 1)))
             
             loss_tensor[tau_idx] = -(log_prob * returns_tensor).sum()
