@@ -105,7 +105,7 @@ if __name__ == '__main__':
     seed = 0
     device = f'cuda:{get_best_cuda()}'
     
-    env_name = "CartPole-v0"
+    env_name = 'CartPole-v0'
     env = gym.make(env_name)
     test_env = gym.make(env_name)
     env.seed(seed)
