@@ -10,7 +10,7 @@ from utils import Algorithm
 from utils import get_best_cuda
 
 
-class TRPO(Algorithm):
+class PPO(Algorithm):
     def __init__(
         self,
         env: gym.Env,
@@ -112,7 +112,7 @@ if __name__ == '__main__':
     test_env.seed(seed)
     th.manual_seed(seed)
     
-    agent = TRPO(
+    agent = PPO(
         env=env,
         actor_lr=actor_lr,
         critic_lr=critic_lr,
