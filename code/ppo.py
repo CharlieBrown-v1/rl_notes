@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from torch import nn
 from torch.optim import Adam
 from tqdm import tqdm
-from utils import Algorithm
+from utils import Algorithm, PolicyNet, ValueNet
 from utils import get_best_cuda
 
 
@@ -17,30 +17,18 @@ class PPO(Algorithm):
         actor_lr: float,
         critic_lr: float,
         batch_size: int,
-        hidden_dim: int,
+        latent_dim: int,
         gamma: float,
         device: th.device,
         ) -> None:
-        self.observation_dim = env.observation_space.shape[0]
-        self.action_dim = 1
-        self.action_size = env.action_space.n
-        
+        self.env = env
         self.batch_size = batch_size
-        self.hidden_dim = hidden_dim
+        self.latent_dim = latent_dim
         self.gamma = gamma
         self.device = device
         
-        self.policy_net = nn.Sequential(
-            nn.Linear(self.observation_dim, self.hidden_dim),
-            nn.ReLU(),
-            nn.Linear(self.hidden_dim, self.action_size),
-            nn.Softmax(dim=-1),
-        ).to(self.device)
-        self.value_net = nn.Sequential(
-            nn.Linear(self.observation_dim, self.hidden_dim),
-            nn.ReLU(),
-            nn.Linear(self.hidden_dim, 1),
-        ).to(self.device)
+        self.policy_net = PolicyNet(self.env, self.device, self.latent_dim)
+        self.value_net = ValueNet(self.env, self.device, self.latent_dim)
         
         self.policy_net_optimizer = Adam(self.policy_net.parameters(), lr=actor_lr)
         self.value_net_optimizer = Adam(self.value_net.parameters(), lr=critic_lr)
@@ -99,7 +87,7 @@ if __name__ == '__main__':
     num_taus = 10
     num_iterations = 10
     batch_size = 64
-    hidden_dim = 128
+    latent_dim = 128
     gamma = 0.98
     log_interval = 10
     seed = 0
@@ -117,7 +105,7 @@ if __name__ == '__main__':
         actor_lr=actor_lr,
         critic_lr=critic_lr,
         batch_size=batch_size,
-        hidden_dim=hidden_dim,
+        latent_dim=latent_dim,
         gamma=gamma,
         device=device,
     )

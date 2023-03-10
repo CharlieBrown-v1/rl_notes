@@ -5,7 +5,7 @@ import numpy as np
 from torch import nn
 from torch.optim import Adam
 from tqdm import tqdm
-from utils import Algorithm
+from utils import Algorithm, PolicyNet
 from utils import get_best_cuda
 
 
@@ -14,30 +14,20 @@ class REINFORCE(Algorithm):
         self,
         env: gym.Env,
         lr: float,
-        hidden_dim: int,
+        latent_dim: int,
         gamma: float,
         device: th.device,
         update_method: str = 'original',
         ) -> None:
-        self.observation_dim = env.observation_space.shape[0]
-        try:
-            self.action_dim = env.action_space.n
-        except AttributeError:
-            self.action_dim = env.action_space.shape[0]
-                
-        self.hidden_dim = hidden_dim
+        self.env = env
+        self.latent_dim = latent_dim
         self.gamma = gamma
         self.device = device
         
         self.update_method = update_method
         assert self.update_method in ['original', 'reward-to-go']
         
-        self.policy_net = nn.Sequential(
-            nn.Linear(self.observation_dim, self.hidden_dim),
-            nn.ReLU(),
-            nn.Linear(self.hidden_dim, self.action_dim),
-            nn.Softmax(dim=-1),
-        ).to(self.device)
+        self.policy_net = PolicyNet(self.env, self.device, self.latent_dim)
         
         self.optimizer = Adam(self.policy_net.parameters(), lr=lr)
     
@@ -110,7 +100,7 @@ if __name__ == '__main__':
     num_episodes = 1000
     num_iterations = 10
     num_taus = 10  # 用 mean returns of num_taus 条轨迹近似期望(Q)
-    hidden_dim = 128
+    latent_dim = 128
     gamma = 0.98
     log_interval = 10
     seed = 0
@@ -123,7 +113,7 @@ if __name__ == '__main__':
     agent = REINFORCE(
         env=env,
         lr=lr,
-        hidden_dim=hidden_dim,
+        latent_dim=latent_dim,
         gamma=gamma,
         device=device,
     )
