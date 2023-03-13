@@ -14,12 +14,12 @@ class ActorCritic(Algorithm):
     def __init__(
         self,
         env: gym.Env,
-        actor_lr: float,
-        critic_lr: float,
-        batch_size: int,
-        latent_dim: int,
-        gamma: float,
-        device: th.device,
+        gamma: float = 0.99,
+        actor_lr: float = 3e-4,
+        critic_lr: float = 1e-3,
+        batch_size: int = 64,
+        latent_dim: int = 64,
+        device: th.device = 'cuda',
         ) -> None:
         self.env = env        
         self.batch_size = batch_size

@@ -13,10 +13,10 @@ class REINFORCE(Algorithm):
     def __init__(
         self,
         env: gym.Env,
-        lr: float,
-        latent_dim: int,
-        gamma: float,
-        device: th.device,
+        gamma: float = 0.99,
+        lr: float = 1e-3,
+        latent_dim: int = 64,
+        device: th.device = 'cuda',
         update_method: str = 'original',
         ) -> None:
         self.env = env

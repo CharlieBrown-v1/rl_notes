@@ -19,7 +19,7 @@ class Algorithm:
 
 class Net(nn.Module):
     def __init__(self) -> None:
-        raise NotImplementedError
+        super().__init__()
         
     def forward(self, input: th.Tensor) -> th.Tensor:
         raise NotImplementedError
@@ -31,6 +31,7 @@ class PolicyNet(Net):
                  device: th.device,
                  latent_dim: int = 64,
                  ) -> None:
+        super().__init__()
         self.observation_dim = env.observation_space.shape[0]
         try:
             self.action_size = env.action_space.n
@@ -68,6 +69,7 @@ class ValueNet(Net):
                  device: th.device,
                  latent_dim: int = 64,
                  ) -> None:
+        super().__init__()
         self.observation_dim = env.observation_space.shape[0]
         self.device = device
         self.latent_dim = latent_dim
