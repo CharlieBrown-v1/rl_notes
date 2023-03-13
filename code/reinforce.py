@@ -17,7 +17,7 @@ class REINFORCE(Algorithm):
         lr: float = 1e-3,
         latent_dim: int = 64,
         device: th.device = 'cuda',
-        update_method: str = 'original',
+        update_method: str = 'reward-to-go',
         ) -> None:
         self.env = env
         self.latent_dim = latent_dim
@@ -31,18 +31,6 @@ class REINFORCE(Algorithm):
         
         self.optimizer = Adam(self.policy_net.parameters(), lr=lr)
     
-    def take_action(self, observation: np.ndarray, deterministic: bool = False):
-        observation = th.as_tensor(observation).float().to(self.device)
-        
-        probs = self.policy_net(observation)
-        action_dist = th.distributions.Categorical(probs)
-        if deterministic:
-            action = action_dist.mean
-        else:
-            action = action_dist.sample()
-        
-        return action.item()
-
     def compute_returns(self, buffer_dict: dict) -> None:
         returns_list = []
         baseline_list = []
@@ -55,7 +43,7 @@ class REINFORCE(Algorithm):
                 returns = self.gamma * returns + tau_rewards[step]
                 returns_list[tau_idx][step] = returns
             if self.update_method == 'original':
-                returns_list[tau_idx] = returns
+                returns_list[tau_idx][:] = returns
             elif self.update_method == 'reward-to-go':
                 pass
             else:
@@ -63,7 +51,7 @@ class REINFORCE(Algorithm):
             baseline_list.append(returns)
         if self.update_method == 'original':
             baseline = np.mean(baseline_list)
-            for tau_idx in range(len(rewards_list)):
+            for tau_idx in range(len(returns_list)):
                 returns_list[tau_idx] -= baseline
         elif self.update_method == 'reward-to-go':
             pass
@@ -83,8 +71,13 @@ class REINFORCE(Algorithm):
             obs_tensor = th.as_tensor(obs_list[tau_idx]).to(self.device).float()
             action_tensor = th.as_tensor(action_list[tau_idx]).to(self.device).long()
             returns_tensor = th.as_tensor(returns_list[tau_idx]).to(self.device).float()
-            logit = self.policy_net(obs_tensor)
-            log_prob = th.log(th.gather(logit, 1, action_tensor.view(-1, 1)))
+            action_dist = self.policy_net(obs_tensor)
+            if self.policy_net.action_type == 'discrete':
+                log_prob = action_dist.log_prob(action_tensor.flatten())
+            elif self.policy_net.action_type == 'continuous':
+                log_prob = action_dist.log_prob(action_tensor)
+            else:
+                raise NotImplementedError
             
             loss_tensor[tau_idx] = -(log_prob * returns_tensor).sum()
         
@@ -101,12 +94,13 @@ if __name__ == '__main__':
     num_iterations = 10
     num_taus = 10  # 用 mean returns of num_taus 条轨迹近似期望(Q)
     latent_dim = 128
-    gamma = 0.98
+    gamma = 0.99
     log_interval = 10
     seed = 0
     device = f'cuda:{get_best_cuda()}'
     
     env_name = 'CartPole-v0'
+    # env_name = 'Pendulum-v0'
     env = gym.make(env_name)
     env.seed(seed)
     th.manual_seed(seed)
@@ -159,4 +153,3 @@ if __name__ == '__main__':
                 pbar.update(1)
 
     print(f'Finish training!')
-    

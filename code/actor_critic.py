@@ -32,23 +32,11 @@ class ActorCritic(Algorithm):
         
         self.policy_net_optimizer = Adam(self.policy_net.parameters(), lr=actor_lr)
         self.value_net_optimizer = Adam(self.value_net.parameters(), lr=critic_lr)
-    
-    def take_action(self, observation: np.ndarray, deterministic: bool = False):
-        observation = th.as_tensor(observation).float().to(self.device)
-        
-        probs = self.policy_net(observation)
-        action_dist = th.distributions.Categorical(probs)
-        if deterministic:
-            action = action_dist.mean
-        else:
-            action = action_dist.sample()
-        
-        return action.item()
-
+   
     def train(self, buffer_dict: dict) -> None:
         obs_tensor = th.as_tensor(buffer_dict['observations']).float().to(self.device)
         next_obs_tensor = th.as_tensor(buffer_dict['next_observations']).float().to(self.device)
-        action_tensor = th.as_tensor(buffer_dict['actions']).long().to(self.device).view(-1, 1)
+        action_tensor = th.as_tensor(buffer_dict['actions']).long().to(self.device).view(-1, self.policy_net.action_dim)
         done_tensor = th.as_tensor(buffer_dict['dones']).long().to(self.device).view(-1, 1)
         reward_tensor = th.as_tensor(buffer_dict['rewards']).float().to(self.device).view(-1, 1)
         
@@ -62,11 +50,17 @@ class ActorCritic(Algorithm):
             sgd_done_tensor = done_tensor[sgd_idx_arr]
             sgd_reward_tensor = reward_tensor[sgd_idx_arr]
             
-            logit = self.policy_net(sgd_obs_tensor)
-            log_prob = th.log(th.gather(logit, 1, sgd_action_tensor))
+            action_dist = self.policy_net(sgd_obs_tensor)
+            if self.policy_net.action_type == 'discrete':
+                log_prob = action_dist.log_prob(sgd_action_tensor.flatten())
+            elif self.policy_net.action_type == 'continuous':
+                log_prob = action_dist.log_prob(sgd_action_tensor)
+            else:
+                raise NotImplementedError
+            
             value = self.value_net(sgd_obs_tensor)
             next_value = self.value_net(sgd_next_obs_tensor) * (1 - sgd_done_tensor)
-            td_target = sgd_reward_tensor + self.gamma * next_value
+            td_target = (sgd_reward_tensor + self.gamma * next_value).detach()
             td_delta = (td_target - value).detach()
 
             policy_loss = -(log_prob * td_delta).mean()
@@ -81,19 +75,20 @@ class ActorCritic(Algorithm):
 
 
 if __name__ == '__main__':
-    actor_lr = 1e-3
-    critic_lr = 1e-2
+    actor_lr = 3e-4
+    critic_lr = 1e-3
     num_episodes = 1000
     num_taus = 10
     num_iterations = 10
     batch_size = 64
     latent_dim = 128
-    gamma = 0.98
+    gamma = 0.99
     log_interval = 10
     seed = 0
     device = f'cuda:{get_best_cuda()}'
     
     env_name = 'CartPole-v0'
+    # env_name = 'Pendulum-v0'
     env = gym.make(env_name)
     test_env = gym.make(env_name)
     env.seed(seed)
@@ -149,4 +144,3 @@ if __name__ == '__main__':
                 pbar.update(1)
 
     print(f'Finish training!')
-    

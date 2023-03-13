@@ -38,31 +38,25 @@ class PPO(Algorithm):
         
         self.policy_net_optimizer = Adam(self.policy_net.parameters(), lr=actor_lr)
         self.value_net_optimizer = Adam(self.value_net.parameters(), lr=critic_lr)
-    
-    def take_action(self, observation: np.ndarray, deterministic: bool = False):
-        observation = th.as_tensor(observation).float().to(self.device)
-        
-        probs = self.policy_net(observation)
-        action_dist = th.distributions.Categorical(probs)
-        if deterministic:
-            action = action_dist.mean
-        else:
-            action = action_dist.sample()
-        
-        return action.item()
-
+   
     def train(self, buffer_dict: dict) -> None:
         obs_tensor = th.as_tensor(buffer_dict['observations']).float().to(self.device)
         next_obs_tensor = th.as_tensor(buffer_dict['next_observations']).float().to(self.device)
-        action_tensor = th.as_tensor(buffer_dict['actions']).long().to(self.device).view(-1, 1)
+        action_tensor = th.as_tensor(buffer_dict['actions']).long().to(self.device).view(-1, self.policy_net.action_dim)
         done_tensor = th.as_tensor(buffer_dict['dones']).long().to(self.device).view(-1, 1)
         reward_tensor = th.as_tensor(buffer_dict['rewards']).float().to(self.device).view(-1, 1)
         
-        old_logit = self.policy_net(obs_tensor)
-        old_log_prob = th.log(th.gather(old_logit, 1, action_tensor)).detach()
+        old_action_dist = self.policy_net(obs_tensor)
+        if self.policy_net.action_type == 'discrete':
+            old_log_prob = old_action_dist.log_prob(action_tensor.flatten()).detach()
+        elif self.policy_net.action_type == 'continuous':
+            old_log_prob = old_action_dist.log_prob(action_tensor).detach()
+        else:
+            raise NotImplementedError
+        
         value = self.value_net(obs_tensor)
         next_value = self.value_net(next_obs_tensor) * (1 - done_tensor)
-        td_target = reward_tensor + self.gamma * next_value
+        td_target = (reward_tensor + self.gamma * next_value).detach()
         td_delta = (td_target - value).detach().cpu().numpy()
         buffer_dict.update({
             'td_delta': td_delta,
@@ -76,25 +70,27 @@ class PPO(Algorithm):
             for sgd_idx in range(0, idx_arr.shape[0], self.batch_size):
                 sgd_idx_arr = idx_arr[sgd_idx: sgd_idx + self.batch_size]
                 sgd_obs_tensor = obs_tensor[sgd_idx_arr]
-                sgd_next_obs_tensor = next_obs_tensor[sgd_idx_arr]
                 sgd_action_tensor = action_tensor[sgd_idx_arr]
-                sgd_done_tensor = done_tensor[sgd_idx_arr]
-                sgd_reward_tensor = reward_tensor[sgd_idx_arr]
                 sgd_advantage_tensor = advantage_tensor[sgd_idx_arr]
                 sgd_old_log_prob = old_log_prob[sgd_idx_arr]
+                sgd_td_target = td_target[sgd_idx_arr]
                 
-                sgd_logit = self.policy_net(sgd_obs_tensor)
-                sgd_log_prob = th.log(th.gather(sgd_logit, 1, sgd_action_tensor))
-                ratio = th.exp(sgd_log_prob - sgd_old_log_prob)
+                action_dist = self.policy_net(sgd_obs_tensor)
+                if self.policy_net.action_type == 'discrete':
+                    log_prob = action_dist.log_prob(sgd_action_tensor.flatten())
+                elif self.policy_net.action_type == 'continuous':
+                    log_prob = action_dist.log_prob(sgd_action_tensor)
+                else:
+                    raise NotImplementedError
+                
+                ratio = th.exp(log_prob - sgd_old_log_prob)
                 surr0 = ratio * sgd_advantage_tensor
                 surr1 = th.clamp(ratio, 1 - self.epsilon, 1 + self.epsilon) * sgd_advantage_tensor
                 
                 value = self.value_net(sgd_obs_tensor)
-                next_value = self.value_net(sgd_next_obs_tensor) * (1 - sgd_done_tensor)
-                td_target = sgd_reward_tensor + self.gamma * next_value
 
                 policy_loss = -th.mean(th.min(surr0, surr1))
-                value_loss = F.mse_loss(value, td_target)
+                value_loss = F.mse_loss(value, sgd_td_target)
 
                 self.policy_net_optimizer.zero_grad()
                 self.value_net_optimizer.zero_grad()
@@ -107,25 +103,25 @@ class PPO(Algorithm):
         done_arr = np.array(buffer_dict['dones'])
         td_delta_arr = np.array(buffer_dict['td_delta'])
         buffer_dict.update({
-            'advantages': np.zeros_like(td_delta_arr),
+            'advantages': np.zeros(td_delta_arr.shape),
         })
         advantage = 0
         for tau_idx in reversed(range(td_delta_arr.shape[0])):
             if done_arr[tau_idx]:
                 advantage = 0
-            advantage = advantage + self.gamma * self.lamda * td_delta_arr[tau_idx]
+            advantage = td_delta_arr[tau_idx] + self.gamma * self.lamda * advantage
             buffer_dict['advantages'][tau_idx] = advantage
     
 
 if __name__ == '__main__':
     actor_lr = 3e-4
-    critic_lr = 1e-2
+    critic_lr = 1e-3
     num_episodes = 1000
     num_taus = 10
     num_iterations = 10
     batch_size = 64
     latent_dim = 128
-    gamma = 0.98
+    gamma = 0.99
     lamda = 0.95
     epsilon = 0.2
     n_epoch = 10
@@ -134,6 +130,7 @@ if __name__ == '__main__':
     device = f'cuda:{get_best_cuda()}'
     
     env_name = 'CartPole-v0'
+    # env_name = 'Pendulum-v0'
     env = gym.make(env_name)
     test_env = gym.make(env_name)
     env.seed(seed)
@@ -192,4 +189,3 @@ if __name__ == '__main__':
                 pbar.update(1)
 
     print(f'Finish training!')
-    
