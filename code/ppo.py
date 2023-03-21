@@ -42,15 +42,17 @@ class PPO(Algorithm):
     def train(self, buffer_dict: dict) -> None:
         obs_tensor = th.as_tensor(buffer_dict['observations']).float().to(self.device)
         next_obs_tensor = th.as_tensor(buffer_dict['next_observations']).float().to(self.device)
-        action_tensor = th.as_tensor(buffer_dict['actions']).long().to(self.device).view(-1, self.policy_net.action_dim)
-        done_tensor = th.as_tensor(buffer_dict['dones']).long().to(self.device).view(-1, 1)
+        done_tensor = th.as_tensor(buffer_dict['dones']).float().to(self.device).view(-1, 1)
         reward_tensor = th.as_tensor(buffer_dict['rewards']).float().to(self.device).view(-1, 1)
         reward_tensor = (reward_tensor + 8) / 8
-        
+
+        # op on the type of action must be cautious !
         old_action_dist = self.policy_net(obs_tensor)
         if self.policy_net.action_type == 'discrete':
+            action_tensor = th.as_tensor(buffer_dict['actions']).long().to(self.device).view(-1, self.policy_net.action_dim)
             old_log_prob = old_action_dist.log_prob(action_tensor.flatten()).detach()
         elif self.policy_net.action_type == 'continuous':
+            action_tensor = th.as_tensor(buffer_dict['actions']).float().to(self.device).view(-1, self.policy_net.action_dim)
             old_log_prob = old_action_dist.log_prob(action_tensor).detach()
         else:
             raise NotImplementedError
@@ -117,16 +119,15 @@ class PPO(Algorithm):
             buffer_dict['advantages'][tau_idx] = advantage
     
 
-if __name__ == '__main__':
-    actor_lr = 1e-4
-    critic_lr = 5e-3
+if __ == '__actor_lr = 3e-4
+    critic_lr = 1e-3
     num_episodes = 2000
     num_taus = 1
     num_iterations = 10
-    batch_size = 1024
+    batch_size = 256
     latent_dim = 128
-    gamma = 0.9
-    lamda = 0.9
+    gamma = 0.99
+    lamda = 0.95
     epsilon = 0.2
     n_epoch = 10
     log_interval = 10
