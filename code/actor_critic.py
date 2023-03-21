@@ -75,8 +75,8 @@ class ActorCritic(Algorithm):
 
 
 if __name__ == '__main__':
-    actor_lr = 3e-4
-    critic_lr = 1e-3
+    actor_lr = 1e-3
+    critic_lr = 1e-2
     num_episodes = 1000
     num_taus = 10
     num_iterations = 10
@@ -88,7 +88,6 @@ if __name__ == '__main__':
     device = f'cuda:{get_best_cuda()}'
     
     env_name = 'CartPole-v0'
-    # env_name = 'Pendulum-v0'
     env = gym.make(env_name)
     test_env = gym.make(env_name)
     env.seed(seed)
