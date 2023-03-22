@@ -44,7 +44,10 @@ class PPO(Algorithm):
         next_obs_tensor = th.as_tensor(buffer_dict['next_observations']).float().to(self.device)
         done_tensor = th.as_tensor(buffer_dict['dones']).float().to(self.device).view(-1, 1)
         reward_tensor = th.as_tensor(buffer_dict['rewards']).float().to(self.device).view(-1, 1)
-        reward_tensor = (reward_tensor + 8) / 8
+        
+        # from zwn
+        if 'Pendulum' in self.env.unwrapped.spec.id:
+            reward_tensor = (reward_tensor + 8) / 8
 
         # op on the type of action must be cautious !
         old_action_dist = self.policy_net(obs_tensor)
@@ -65,7 +68,7 @@ class PPO(Algorithm):
             'td_delta': td_delta,
         })
         
-        self.compute_and_advantage(buffer_dict)
+        self.compute_returns_and_advantage(buffer_dict)
         advantage_tensor = th.as_tensor(buffer_dict['advantages']).float().to(self.device).view(-1, 1)
         returns_tensor = td_target  # TD
         for _ in range(self.n_epoch):
@@ -105,29 +108,41 @@ class PPO(Algorithm):
                 self.policy_net_optimizer.step()
                 self.value_net_optimizer.step()
 
-    def compute_and_advantage(self, buffer_dict: dict) -> None:
+    def compute_returns_and_advantage(self, buffer_dict: dict) -> None:
         done_arr = np.array(buffer_dict['dones'])
         td_delta_arr = np.array(buffer_dict['td_delta'])
+        reward_arr = np.array(buffer_dict['rewards'])
+        
+        # from zwn
+        if 'Pendulum' in self.env.unwrapped.spec.id:
+            reward_arr = (reward_arr + 8) / 8
+            
         buffer_dict.update({
             'advantages': np.zeros(td_delta_arr.shape),
+            'returns': np.zeros(reward_arr.shape),
         })
         advantage = 0
+        returns = 0
         for tau_idx in reversed(range(td_delta_arr.shape[0])):
             if done_arr[tau_idx]:
                 advantage = 0
+                returns = 0
             advantage = td_delta_arr[tau_idx] + self.gamma * self.lamda * advantage
+            returns = reward_arr[tau_idx] + self.gamma * returns
             buffer_dict['advantages'][tau_idx] = advantage
+            buffer_dict['returns'][tau_idx] = returns
     
 
-if __ == '__actor_lr = 3e-4
-    critic_lr = 1e-3
+if __name__ == '__main__':
+    actor_lr = 1e-4
+    critic_lr = 5e-3
     num_episodes = 2000
     num_taus = 1
     num_iterations = 10
     batch_size = 256
     latent_dim = 128
-    gamma = 0.99
-    lamda = 0.95
+    gamma = 0.9
+    lamda = 0.9
     epsilon = 0.2
     n_epoch = 10
     log_interval = 10
@@ -136,6 +151,8 @@ if __ == '__actor_lr = 3e-4
     
     env_name = 'CartPole-v0'
     env_name = 'Pendulum-v0'
+    env_name = 'HalfCheetah-v2'
+
     env = gym.make(env_name)
     test_env = gym.make(env_name)
     env.seed(seed)
