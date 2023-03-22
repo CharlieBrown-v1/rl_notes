@@ -103,8 +103,8 @@ class PPO(Algorithm):
                 self.value_net_optimizer.zero_grad()
                 policy_loss.backward()
                 value_loss.backward()
-                th.nn.utils.clip_grad_norm_(self.policy_net.parameters(), 1)
-                th.nn.utils.clip_grad_norm_(self.value_net.parameters(), 1)
+                nn.utils.clip_grad_norm_(self.policy_net.parameters(), 1)
+                nn.utils.clip_grad_norm_(self.value_net.parameters(), 1)
                 self.policy_net_optimizer.step()
                 self.value_net_optimizer.step()
 
@@ -135,14 +135,14 @@ class PPO(Algorithm):
 
 if __name__ == '__main__':
     actor_lr = 1e-4
-    critic_lr = 5e-3
+    critic_lr = 1e-3
     num_episodes = 2000
     num_taus = 1
     num_iterations = 10
     batch_size = 256
     latent_dim = 128
-    gamma = 0.9
-    lamda = 0.9
+    gamma = 0.99
+    lamda = 0.95
     epsilon = 0.2
     n_epoch = 10
     log_interval = 10
@@ -151,7 +151,7 @@ if __name__ == '__main__':
     
     env_name = 'CartPole-v0'
     env_name = 'Pendulum-v0'
-    env_name = 'HalfCheetah-v2'
+    env_name = 'Walker2d-v3'
 
     env = gym.make(env_name)
     test_env = gym.make(env_name)
