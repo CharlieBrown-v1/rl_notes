@@ -154,9 +154,7 @@ if __name__ == '__main__':
     env_name = 'Walker2d-v3'
 
     env = gym.make(env_name)
-    test_env = gym.make(env_name)
     env.seed(seed)
-    test_env.seed(seed)
     th.manual_seed(seed)
     
     agent = PPO(
