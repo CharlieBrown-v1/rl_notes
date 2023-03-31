@@ -2,14 +2,12 @@ import gym
 import torch as th
 import numpy as np
 
-from torch import nn
-from torch.optim import Adam
 from tqdm import tqdm
-from utils import Algorithm, PolicyNet
+from utils import PGAlgorithm
 from utils import get_best_cuda
 
 
-class REINFORCE(Algorithm):
+class REINFORCE(PGAlgorithm):
     def __init__(
         self,
         env: gym.Env,
@@ -19,17 +17,15 @@ class REINFORCE(Algorithm):
         device: th.device = 'cuda',
         update_method: str = 'reward-to-go',
         ) -> None:
-        self.env = env
-        self.latent_dim = latent_dim
-        self.gamma = gamma
-        self.device = device
-        
+        super(REINFORCE, self).__init__(
+            env=env,
+            gamma=gamma,
+            lr=lr,
+            latent_dim=latent_dim,
+            device=device,
+        )
         self.update_method = update_method
         assert self.update_method in ['original', 'reward-to-go']
-        
-        self.policy_net = PolicyNet(self.env, self.device, self.latent_dim)
-        
-        self.optimizer = Adam(self.policy_net.parameters(), lr=lr)
     
     def compute_returns(self, buffer_dict: dict) -> None:
         returns_list = []
@@ -71,7 +67,7 @@ class REINFORCE(Algorithm):
             obs_tensor = th.as_tensor(obs_list[tau_idx]).to(self.device).float()
             action_tensor = th.as_tensor(action_list[tau_idx]).to(self.device).long()
             returns_tensor = th.as_tensor(returns_list[tau_idx]).to(self.device).float()
-            action_dist = self.policy_net(obs_tensor)
+            action_dist = self.compute_distribution(obs_tensor)
             if self.policy_net.action_type == 'discrete':
                 log_prob = action_dist.log_prob(action_tensor.flatten())
             elif self.policy_net.action_type == 'continuous':
@@ -83,9 +79,9 @@ class REINFORCE(Algorithm):
         
         loss = loss_tensor.mean()
         
-        self.optimizer.zero_grad()
+        self.policy_net_optimizer.zero_grad()
         loss.backward()
-        self.optimizer.step()
+        self.policy_net_optimizer.step()
 
 
 if __name__ == '__main__':

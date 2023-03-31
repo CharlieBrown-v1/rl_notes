@@ -3,14 +3,12 @@ import torch as th
 import numpy as np
 import torch.nn.functional as F
 
-from torch import nn
-from torch.optim import Adam
 from tqdm import tqdm
-from utils import Algorithm, PolicyNet, ValueNet
+from utils import ACAlgorihm
 from utils import get_best_cuda
 
 
-class ActorCritic(Algorithm):
+class ActorCritic(ACAlgorihm):
     def __init__(
         self,
         env: gym.Env,
@@ -21,22 +19,21 @@ class ActorCritic(Algorithm):
         latent_dim: int = 64,
         device: th.device = 'cuda',
         ) -> None:
-        self.env = env        
+        super(ActorCritic, self).__init__(
+            env=env,
+            gamma=gamma,
+            actor_lr=actor_lr,
+            critic_lr=critic_lr,
+            latent_dim=latent_dim,
+            device=device,
+        )
+        
         self.batch_size = batch_size
-        self.latent_dim = latent_dim
-        self.gamma = gamma
-        self.device = device
-        
-        self.policy_net = PolicyNet(self.env, self.device, self.latent_dim)
-        self.value_net = ValueNet(self.env, self.device, self.latent_dim)
-        
-        self.policy_net_optimizer = Adam(self.policy_net.parameters(), lr=actor_lr)
-        self.value_net_optimizer = Adam(self.value_net.parameters(), lr=critic_lr)
    
     def train(self, buffer_dict: dict) -> None:
         obs_tensor = th.as_tensor(buffer_dict['observations']).float().to(self.device)
         next_obs_tensor = th.as_tensor(buffer_dict['next_observations']).float().to(self.device)
-        action_tensor = th.as_tensor(buffer_dict['actions']).long().to(self.device).view(-1, self.policy_net.action_dim)
+        action_tensor = th.as_tensor(buffer_dict['actions']).long().to(self.device).view(-1, self.action_dim)
         done_tensor = th.as_tensor(buffer_dict['dones']).long().to(self.device).view(-1, 1)
         reward_tensor = th.as_tensor(buffer_dict['rewards']).float().to(self.device).view(-1, 1)
         
@@ -50,7 +47,7 @@ class ActorCritic(Algorithm):
             sgd_done_tensor = done_tensor[sgd_idx_arr]
             sgd_reward_tensor = reward_tensor[sgd_idx_arr]
             
-            action_dist = self.policy_net(sgd_obs_tensor)
+            action_dist = self.compute_distribution(sgd_obs_tensor)
             if self.policy_net.action_type == 'discrete':
                 log_prob = action_dist.log_prob(sgd_action_tensor.flatten())
             elif self.policy_net.action_type == 'continuous':
